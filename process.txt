@@ -1,0 +1,4 @@
+field to put my job description
+upload my resume 
+pdf to image 
+prompts template[multiple prompts]

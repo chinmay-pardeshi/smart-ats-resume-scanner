@@ -1,0 +1,8 @@
+streamlit
+google-generativeai
+python-dotenv
+pdf2image
+
+# pip install streamlit google-generativeai python-dotenv pillow
+# pip install pdf2image
+# pip install PyMuPDF
