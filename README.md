@@ -15,7 +15,7 @@ This project is an AI-powered Smart ATS (Applicant Tracking System) built using 
 
 ## 🖼️ Demo
 
-<img src="ats_demo.gif" alt="Smart ATS Demo" width="100%"/>
+<img src="demo/ats_demo.gif" alt="Smart ATS Demo" width="100%"/>
 
 ---
 
