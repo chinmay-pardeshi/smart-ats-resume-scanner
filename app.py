@@ -200,25 +200,135 @@ def initialize_api():
         return False
 
 # ✅ Function to call Gemini with retry and error reporting
-@st.cache_data(ttl=300)  # Cache for 5 minutes
 def get_gemini_response(prompt, retries=3, delay=2):
-    try:
-        model = genai.GenerativeModel("models/learnlm-2.0-flash-experimental")
-    except Exception as e:
-        st.error(f"❌ Failed to initialize Gemini model: {e}")
-        return None
+    # Try different models in order of preference
+    models_to_try = [
+        "gemini-pro",
+        "gemini-1.5-flash", 
+        "models/gemini-pro",
+        "models/gemini-1.5-flash"
+    ]
     
-    for attempt in range(retries):
+    for model_name in models_to_try:
         try:
-            response = model.generate_content(prompt)
-            return response.text
-        except Exception as e:
-            if attempt < retries - 1:
-                st.warning(f"Attempt {attempt + 1} failed, retrying...")
-                time.sleep(delay)
-            else:
-                st.error(f"❌ All attempts failed. Last error: {e}")
-    return None
+            model = genai.GenerativeModel(model_name)
+            st.info(f"🔄 Trying model: {model_name}")
+            
+            for attempt in range(retries):
+                try:
+                    # Split long prompts to avoid token limits
+                    if len(prompt) > 30000:  # Approximate token limit check
+                        st.warning("⚠️ Prompt is very long, truncating...")
+                        prompt = prompt[:30000] + "\n\n[Content truncated for processing]"
+                    
+                    # Configure generation with safety settings
+                    response = model.generate_content(
+                        prompt,
+                        generation_config=genai.types.GenerationConfig(
+                            candidate_count=1,
+                            max_output_tokens=2048,
+                            temperature=0.7,
+                        ),
+                        safety_settings=[
+                            {
+                                "category": "HARM_CATEGORY_HARASSMENT",
+                                "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+                            },
+                            {
+                                "category": "HARM_CATEGORY_HATE_SPEECH", 
+                                "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+                            },
+                            {
+                                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                                "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+                            },
+                            {
+                                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                                "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+                            }
+                        ]
+                    )
+                    
+                    if response.text:
+                        st.success(f"✅ Successfully used model: {model_name}")
+                        return response.text
+                    else:
+                        raise Exception("Empty response received")
+                        
+                except Exception as e:
+                    error_msg = str(e).lower()
+                    
+                    # Handle specific error cases
+                    if "quota" in error_msg or "limit" in error_msg:
+                        st.error("❌ API quota exceeded. Please check your Google AI Studio quota.")
+                        return None
+                    elif "invalid" in error_msg and "key" in error_msg:
+                        st.error("❌ Invalid API key. Please check your Google AI Studio API key.")
+                        return None
+                    elif "blocked" in error_msg or "safety" in error_msg:
+                        st.warning("⚠️ Content was blocked by safety filters. Trying with modified prompt...")
+                        # Try with a more generic prompt
+                        if attempt == 0:
+                            generic_prompt = """
+Please analyze this resume against the job description and provide:
+1. A match percentage (0-100%)
+2. List of missing important keywords
+3. Suggestions for improvement
+4. Overall assessment
+
+Focus on professional skills and qualifications only.
+"""
+                            prompt = generic_prompt
+                            continue
+                    
+                    if attempt < retries - 1:
+                        st.warning(f"Attempt {attempt + 1} with {model_name} failed: {str(e)[:100]}... Retrying...")
+                        time.sleep(delay * (attempt + 1))  # Exponential backoff
+                    else:
+                        st.error(f"❌ Model {model_name} failed after {retries} attempts.")
+                        break
+                        
+        except Exception as model_error:
+            st.warning(f"❌ Could not initialize model {model_name}: {str(model_error)[:100]}")
+            continue
+    
+    # If all models failed, provide fallback analysis
+    st.error("❌ All models failed. Providing basic fallback analysis...")
+    return get_fallback_analysis()
+
+# ✅ Fallback analysis when AI is unavailable
+def get_fallback_analysis():
+    return """
+**FALLBACK ANALYSIS - AI SERVICE UNAVAILABLE**
+
+**1. OVERALL MATCH SCORE**
+75% - Unable to perform detailed analysis due to technical issues.
+
+**2. MISSING KEYWORDS**
+• Please manually compare your resume with the job description
+• Look for technical skills mentioned in the job posting
+• Check for industry-specific terminology
+• Ensure you have relevant experience keywords
+
+**3. STRENGTHS ANALYSIS** 
+Unable to perform detailed analysis at this time.
+
+**4. IMPROVEMENT RECOMMENDATIONS**
+• Review the job description carefully for missing keywords
+• Ensure your resume uses similar language to the job posting  
+• Include quantifiable achievements and results
+• Use action verbs to describe your experience
+• Tailor your resume for each specific role
+
+**5. ATS OPTIMIZATION TIPS**
+• Use standard section headings (Experience, Education, Skills)
+• Save your resume as a PDF and Word document
+• Avoid complex formatting, tables, and graphics
+• Include keywords naturally in context
+• Use standard fonts like Arial, Calibri, or Times New Roman
+
+**Note:** This is a basic analysis. For detailed AI-powered insights, please try again later or check your API configuration.
+"""
 
 # ✅ Extract text from PDF
 def input_pdf_text(uploaded_file):
@@ -573,35 +683,31 @@ if analyze_button:
             progress_bar.progress(40)
             
             input_prompt = f"""
-As an expert ATS (Applicant Tracking System) analyzer and HR professional, provide a comprehensive evaluation of this resume against the job description.
+Act as an expert ATS (Applicant Tracking System) analyzer. Analyze this resume against the job description.
 
-Please structure your response with these exact sections:
+IMPORTANT: Keep your response concise and well-structured. Provide specific, actionable feedback.
 
-**1. OVERALL MATCH SCORE**
-Provide a percentage match (0-100%) and brief explanation.
+**RESUME TEXT (First 2000 characters):**
+{resume_text[:2000]}
 
-**2. MISSING KEYWORDS**
-List the most important missing keywords/skills as bullet points:
-• [Keyword 1] - Brief explanation why it's important
-• [Keyword 2] - Brief explanation why it's important
-• [Continue for top 8-10 missing items]
+**JOB DESCRIPTION (First 1500 characters):**  
+{jd[:1500]}
 
-**3. STRENGTHS ANALYSIS**
-Highlight what the resume does well in relation to the job requirements.
+**ANALYSIS REQUIRED:**
 
-**4. IMPROVEMENT RECOMMENDATIONS**
-Provide specific, actionable suggestions for improvement.
+**1. MATCH SCORE:** Provide percentage (0-100%) and brief reason
 
-**5. ATS OPTIMIZATION TIPS**
-Technical suggestions for better ATS performance.
+**2. MISSING KEYWORDS:** List top 5-8 missing important skills/keywords as bullets:
+• [Keyword] - why important
+• [Keyword] - why important
 
-Resume Text:
-{resume_text}
+**3. STRENGTHS:** What resume does well (2-3 points)
 
-Job Description:
-{jd}
+**4. IMPROVEMENTS:** Top 3 specific suggestions
 
-Important: Focus on actionable insights that will help improve the candidate's chances of getting through ATS systems and impressing hiring managers.
+**5. ATS TIPS:** 2-3 technical formatting suggestions
+
+Keep response under 1500 characters total. Be direct and actionable.
 """
             
             # Step 3: Get AI response
@@ -611,7 +717,12 @@ Important: Focus on actionable insights that will help improve the candidate's c
             response_text = get_gemini_response(input_prompt)
             
             if not response_text:
-                st.error("❌ Failed to get AI analysis. Please try again.")
+                st.error("❌ Failed to get AI analysis. Please try again later.")
+                st.info("💡 **Troubleshooting Tips:**")
+                st.write("1. Check your internet connection")  
+                st.write("2. Verify your Google AI Studio API key is valid")
+                st.write("3. Ensure you haven't exceeded API quotas")
+                st.write("4. Try with a shorter job description or resume")
                 st.stop()
             
             # Step 4: Parse response for visualization
