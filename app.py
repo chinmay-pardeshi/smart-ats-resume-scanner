@@ -3,26 +3,32 @@ import google.generativeai as genai
 import os
 import PyPDF2 as pdf
 from dotenv import load_dotenv
+import time
 
-# Load environment variables
-load_dotenv()
-api_key = st.secrets("GOOGLE_API_KEY")
-
-# Configure Gemini
-if api_key:
+try:
+    api_key = st.secrets["GOOGLE_API_KEY"]
     genai.configure(api_key=api_key)
-else:
-    st.error("❌ GOOGLE_API_KEY not found. Please set it in a .env file.")
+except Exception:
+    st.error("❌ GOOGLE_API_KEY not found in Streamlit secrets.")
     st.stop()
 
 # Function to call Gemini
-def get_gemini_response(prompt):
+def get_gemini_response(prompt, retries=3, delay=2):
     try:
         model = genai.GenerativeModel('models/learnlm-2.0-flash-experimental')
-        response = model.generate_content(prompt)
-        return response.text
     except Exception as e:
-        return f"❌ Error from Gemini: {str(e)}"
+        return f"❌ Failed to initialize model: {str(e)}"
+
+    for attempt in range(retries):
+        try:
+            response = model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            print(f"Retry {attempt + 1}/{retries} failed: {e}")
+            time.sleep(delay)
+
+    return "❌ Error from Gemini API after multiple retries."
+
 
 # Function to extract PDF text
 def input_pdf_text(uploaded_file):
@@ -73,5 +79,6 @@ Job Description:
 
     else:
         st.warning("⚠️ Please upload a resume and provide a job description.")
+
 
 
