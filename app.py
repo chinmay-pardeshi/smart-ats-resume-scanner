@@ -2,9 +2,6 @@ import streamlit as st
 import google.generativeai as genai
 import PyPDF2 as pdf
 import time
-import plotly.graph_objects as go
-import plotly.express as px
-from plotly.subplots import make_subplots
 import pandas as pd
 import re
 import json
@@ -262,110 +259,177 @@ def parse_ai_response(response_text):
         st.warning(f"Could not fully parse response for visualization: {e}")
         return 75, ["Unable to extract keywords"]
 
-# ✅ Create Skills Gap Visualization
+# ✅ Create Skills Gap Visualization using Streamlit charts
 def create_skills_visualization(match_score, missing_keywords):
-    # Create subplots
-    fig = make_subplots(
-        rows=2, cols=2,
-        subplot_titles=('Overall Match Score', 'Skills Gap Analysis', 'Top Missing Skills', 'Recommendation Priority'),
-        specs=[[{"type": "indicator"}, {"type": "bar"}],
-               [{"type": "pie"}, {"type": "scatter"}]]
-    )
+    st.markdown("### 📊 Skills Gap Analysis Dashboard")
     
-    # 1. Match Score Gauge
-    fig.add_trace(
-        go.Indicator(
-            mode="gauge+number+delta",
-            value=match_score,
-            domain={'x': [0, 1], 'y': [0, 1]},
-            title={'text': f"Match Score: {match_score}%"},
-            delta={'reference': 80, 'position': "top"},
-            gauge={
-                'axis': {'range': [None, 100]},
-                'bar': {'color': "#667eea"},
-                'steps': [
-                    {'range': [0, 50], 'color': "#ffebee"},
-                    {'range': [50, 80], 'color': "#fff3e0"},
-                    {'range': [80, 100], 'color': "#e8f5e8"}
-                ],
-                'threshold': {
-                    'line': {'color': "red", 'width': 4},
-                    'thickness': 0.75,
-                    'value': 90
-                }
-            }
-        ),
-        row=1, col=1
-    )
+    # Row 1: Match Score and Overall Stats
+    col1, col2, col3 = st.columns([2, 1, 1])
     
-    # 2. Skills Gap Bar Chart
-    categories = ['Technical Skills', 'Soft Skills', 'Experience', 'Education', 'Certifications']
-    gap_scores = [85, 70, 90, 75, 60]  # Mock data - you can enhance this based on actual analysis
-    
-    fig.add_trace(
-        go.Bar(
-            x=categories,
-            y=gap_scores,
-            marker_color=['#667eea', '#764ba2', '#11998e', '#38ef7d', '#ffa726'],
-            name="Skill Match %"
-        ),
-        row=1, col=2
-    )
-    
-    # 3. Missing Skills Pie Chart
-    if missing_keywords:
-        # Take top 5 missing keywords for visualization
-        top_missing = missing_keywords[:5] if len(missing_keywords) >= 5 else missing_keywords
-        values = [len(keyword.split()) for keyword in top_missing]  # Simple weight based on keyword length
+    with col1:
+        # Match Score Gauge (using metric with delta)
+        st.markdown("#### 🎯 Overall Match Score")
         
-        fig.add_trace(
-            go.Pie(
-                labels=top_missing,
-                values=values,
-                hole=0.4,
-                marker_colors=['#ff6b6b', '#ffa726', '#ffeb3b', '#66bb6a', '#42a5f5']
-            ),
-            row=2, col=1
-        )
+        # Color-coded match score display
+        if match_score >= 80:
+            st.success(f"**{match_score}%** - Excellent Match! 🎉")
+            gauge_color = "🟢"
+        elif match_score >= 60:
+            st.warning(f"**{match_score}%** - Good Match 👍")
+            gauge_color = "🟡"
+        else:
+            st.error(f"**{match_score}%** - Needs Improvement 📈")
+            gauge_color = "🔴"
+        
+        # Visual gauge using progress bar
+        progress_color = "normal" if match_score >= 80 else "slow"
+        st.progress(match_score/100)
+        
+        # Recommendation based on score
+        if match_score >= 80:
+            st.info("💡 **Recommendation:** Your resume is well-aligned! Focus on minor optimizations.")
+        elif match_score >= 60:
+            st.info("💡 **Recommendation:** Good foundation. Add missing keywords to boost your score.")
+        else:
+            st.info("💡 **Recommendation:** Consider major revisions and add key missing skills.")
     
-    # 4. Recommendation Priority Scatter
-    priority_skills = missing_keywords[:8] if len(missing_keywords) >= 8 else missing_keywords
-    importance = [90, 85, 80, 75, 70, 65, 60, 55][:len(priority_skills)]
-    difficulty = [30, 45, 60, 40, 80, 35, 55, 70][:len(priority_skills)]
+    with col2:
+        st.markdown("#### 📊 Quick Stats")
+        st.metric("Missing Skills", len(missing_keywords), delta=f"-{len(missing_keywords)}")
+        
+        # ATS Readiness
+        ats_ready = "Ready" if match_score >= 70 else "Needs Work"
+        ats_delta = "✅" if match_score >= 70 else "⚠️"
+        st.metric("ATS Readiness", ats_ready, delta=ats_delta)
     
-    fig.add_trace(
-        go.Scatter(
-            x=difficulty,
-            y=importance,
-            mode='markers+text',
-            text=priority_skills,
-            textposition="top center",
-            marker=dict(
-                size=16,
-                color=importance,
-                colorscale='Viridis',
-                showscale=True,
-                colorbar=dict(title="Importance")
-            ),
-            name="Skills Priority"
-        ),
-        row=2, col=2
-    )
+    with col3:
+        st.markdown("#### 🏆 Grade")
+        if match_score >= 90:
+            grade, emoji = "A+", "🏆"
+        elif match_score >= 80:
+            grade, emoji = "A", "🥇"
+        elif match_score >= 70:
+            grade, emoji = "B", "🥈"
+        elif match_score >= 60:
+            grade, emoji = "C", "🥉"
+        else:
+            grade, emoji = "D", "📚"
+        
+        st.markdown(f"""
+        <div style="text-align: center; padding: 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; color: white;">
+            <h2>{emoji} {grade}</h2>
+            <p>Resume Grade</p>
+        </div>
+        """, unsafe_allow_html=True)
     
-    # Update layout
-    fig.update_layout(
-        height=800,
-        showlegend=False,
-        title_text="📊 Comprehensive Skills Gap Analysis",
-        title_x=0.5,
-        title_font_size=20
-    )
+    st.markdown("---")
     
-    # Update axes labels for scatter plot
-    fig.update_xaxes(title_text="Learning Difficulty", row=2, col=2)
-    fig.update_yaxes(title_text="Importance Level", row=2, col=2)
+    # Row 2: Skills Analysis
+    if missing_keywords:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 🎯 Top Missing Skills")
+            
+            # Create priority-based visualization
+            top_missing = missing_keywords[:8] if len(missing_keywords) >= 8 else missing_keywords
+            
+            # Create a DataFrame for missing skills with priority
+            skills_data = []
+            for i, skill in enumerate(top_missing):
+                if i < 3:
+                    priority = "🔴 High"
+                    importance = 90 - (i * 5)
+                elif i < 6:
+                    priority = "🟡 Medium"  
+                    importance = 75 - ((i-3) * 5)
+                else:
+                    priority = "🟢 Low"
+                    importance = 60 - ((i-6) * 5)
+                
+                skills_data.append({
+                    "Skill": skill[:30] + "..." if len(skill) > 30 else skill,
+                    "Priority": priority,
+                    "Importance": importance
+                })
+            
+            skills_df = pd.DataFrame(skills_data)
+            
+            # Display as a styled table
+            for _, row in skills_df.iterrows():
+                priority_color = "#ffebee" if "High" in row["Priority"] else "#fff3e0" if "Medium" in row["Priority"] else "#e8f5e8"
+                st.markdown(f"""
+                <div style="background: {priority_color}; padding: 0.75rem; margin: 0.25rem 0; border-radius: 8px; border-left: 4px solid #667eea;">
+                    <strong>{row["Skill"]}</strong><br>
+                    <small>{row["Priority"]} Priority • Impact: {row["Importance"]}%</small>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown("#### 📈 Skills Category Breakdown")
+            
+            # Categorize skills (simple keyword-based categorization)
+            tech_keywords = ['python', 'java', 'javascript', 'sql', 'aws', 'cloud', 'api', 'database', 'programming']
+            soft_keywords = ['communication', 'leadership', 'management', 'teamwork', 'collaboration']
+            cert_keywords = ['certification', 'certified', 'license', 'credential']
+            
+            categories = {'Technical Skills': 0, 'Soft Skills': 0, 'Certifications': 0, 'Other': 0}
+            
+            for keyword in missing_keywords:
+                keyword_lower = keyword.lower()
+                if any(tech in keyword_lower for tech in tech_keywords):
+                    categories['Technical Skills'] += 1
+                elif any(soft in keyword_lower for soft in soft_keywords):
+                    categories['Soft Skills'] += 1
+                elif any(cert in keyword_lower for cert in cert_keywords):
+                    categories['Certifications'] += 1
+                else:
+                    categories['Other'] += 1
+            
+            # Create category visualization
+            category_df = pd.DataFrame.from_dict(categories, orient='index', columns=['Count'])
+            category_df = category_df[category_df['Count'] > 0]  # Only show non-zero categories
+            
+            if not category_df.empty:
+                st.bar_chart(category_df)
+                
+                # Show category insights
+                max_category = category_df.idxmax()['Count']
+                st.info(f"💡 **Focus Area:** Most missing skills are in **{max_category}**")
+            else:
+                st.success("🎉 Great! No major skill gaps identified!")
     
-    return fig
+    # Row 3: Action Plan
+    st.markdown("---")
+    st.markdown("#### 🚀 Recommended Action Plan")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("##### 🎯 Immediate Actions (Next 24 Hours)")
+        if missing_keywords[:2]:
+            for skill in missing_keywords[:2]:
+                st.markdown(f"• Add **{skill}** to relevant sections")
+        st.markdown("• Review job description keywords")
+        st.markdown("• Update resume formatting for ATS")
+    
+    with col2:
+        st.markdown("##### 📅 Short-term Goals (Next Week)")
+        if missing_keywords[2:5]:
+            for skill in missing_keywords[2:5]:
+                st.markdown(f"• Research and add **{skill}**")
+        st.markdown("• Optimize resume structure")
+        st.markdown("• Prepare skill-based examples")
+    
+    with col3:
+        st.markdown("##### 🎓 Long-term Development (Next Month)")
+        if missing_keywords[5:8]:
+            for skill in missing_keywords[5:8]:
+                st.markdown(f"• Learn/improve **{skill}**")
+        st.markdown("• Obtain relevant certifications")
+        st.markdown("• Build portfolio projects")
+    
+    return True
 
 # 🎯 Header Section
 st.markdown("""
@@ -609,8 +673,9 @@ Important: Focus on actionable insights that will help improve the candidate's c
             # Visualization
             if missing_keywords:
                 st.markdown("### 📈 Interactive Skills Gap Analysis")
-                fig = create_skills_visualization(match_score, missing_keywords)
-                st.plotly_chart(fig, use_container_width=True)
+                create_skills_visualization(match_score, missing_keywords)
+            else:
+                st.success("🎉 Excellent! No significant skill gaps identified.")
             
             # Detailed Analysis
             st.markdown("### 📋 Detailed Analysis Report")
