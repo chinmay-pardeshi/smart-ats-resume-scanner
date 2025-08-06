@@ -15,7 +15,7 @@ except Exception:
 # ✅ Function to call Gemini with retry and error reporting
 def get_gemini_response(prompt, retries=3, delay=2):
     try:
-        model = genai.GenerativeModel("gemini-pro")
+        model = genai.GenerativeModel("models/learnlm-2.0-flash-experimental")
     except Exception as e:
         st.error(f"❌ Failed to initialize Gemini model: {e}")
         st.stop()
@@ -95,3 +95,4 @@ Job Description:
 
     else:
         st.warning("⚠️ Please upload a resume and provide a job description.")
+
