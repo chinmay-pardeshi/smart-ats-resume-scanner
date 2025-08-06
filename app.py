@@ -1,10 +1,9 @@
 import streamlit as st
 import google.generativeai as genai
-import os
 import PyPDF2 as pdf
-from dotenv import load_dotenv
 import time
 
+# ✅ Load API key from Streamlit secrets
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
     genai.configure(api_key=api_key)
@@ -12,26 +11,27 @@ except Exception:
     st.error("❌ GOOGLE_API_KEY not found in Streamlit secrets.")
     st.stop()
 
-# Function to call Gemini
+
+# ✅ Function to call Gemini with retry and error reporting
 def get_gemini_response(prompt, retries=3, delay=2):
     try:
-        model = genai.GenerativeModel('gemini-pro') #models/learnlm-2.0-flash-experimental 
-    
+        model = genai.GenerativeModel("gemini-pro")
     except Exception as e:
-        return f"❌ Failed to initialize model: {str(e)}"
+        st.error(f"❌ Failed to initialize Gemini model: {e}")
+        st.stop()
 
     for attempt in range(retries):
         try:
             response = model.generate_content(prompt)
             return response.text
         except Exception as e:
-            print(f"Retry {attempt + 1}/{retries} failed: {e}")
+            st.warning(f"Attempt {attempt + 1} failed: {e}")
             time.sleep(delay)
 
-    return "❌ Error from Gemini API after multiple retries."
+    return "❌ Gemini API failed after multiple retries."
 
 
-# Function to extract PDF text
+# ✅ Extract text from PDF
 def input_pdf_text(uploaded_file):
     reader = pdf.PdfReader(uploaded_file)
     text = ""
@@ -39,10 +39,22 @@ def input_pdf_text(uploaded_file):
         text += page.extract_text()
     return text
 
-# Streamlit UI
+
+# ✅ Streamlit UI
 st.title("📄 Smart ATS - Resume Evaluator")
 st.markdown("Improve your resume based on job description using AI")
 
+# 💡 TEST Gemini API works
+if st.button("🔧 Test Gemini"):
+    try:
+        model = genai.GenerativeModel("gemini-pro")
+        response = model.generate_content("Hello Gemini, are you working?")
+        st.success("✅ Gemini responded:")
+        st.write(response.text)
+    except Exception as e:
+        st.error(f"❌ Gemini test failed: {e}")
+
+# Resume + JD input
 jd = st.text_area("📌 Paste the Job Description Here")
 uploaded_file = st.file_uploader("📎 Upload Your Resume (PDF Only)", type="pdf", help="Upload your resume in PDF format")
 submit = st.button("🔍 Evaluate Resume")
@@ -72,6 +84,9 @@ Job Description:
 {jd}
 """
 
+            # Optional: Show prompt length
+            st.caption(f"Prompt length: {len(input_prompt)} characters")
+
             # Get Gemini response
             response_text = get_gemini_response(input_prompt)
 
@@ -80,7 +95,3 @@ Job Description:
 
     else:
         st.warning("⚠️ Please upload a resume and provide a job description.")
-
-
-
-
