@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-api_key = os.getenv("GOOGLE_API_KEY")
+api_key = st.secrets("GOOGLE_API_KEY")
 
 # Configure Gemini
 if api_key:
@@ -73,4 +73,5 @@ Job Description:
 
     else:
         st.warning("⚠️ Please upload a resume and provide a job description.")
+
 
